@@ -4,7 +4,6 @@ import anthropic
 import os
 
 app = Flask(__name__)
-
 conversations = {}
 
 SYSTEM_PROMPT = """You are MumMum's official WhatsApp AI assistant.
@@ -46,21 +45,115 @@ RULES:
 - For complaints: apologize and offer 1 free cup
 - For Tamil messages: reply in Tamil
 - Always end with a helpful question
-- Be warm and friendly"""
+- Be warm and friendly
+- If customer types MENU or menu or drinks or list, always show all 5 drinks with prices clearly
+- Never repeat the welcome message again after the first message
+- Give different helpful responses each time based on what customer asks"""
+
+
+WELCOME_MESSAGE = """🌾 *Vanakkam! Welcome to MumMum!* ☕
+
+*Ancient Grains. Modern Sips.*
+
+I am your MumMum assistant! Here is what I can help with:
+
+🥤 Type *MENU* - See all 5 millet drinks
+📍 Type *LOCATION* - Find nearest kiosk
+💚 Type *HEALTH* - Get drink recommendation
+🏪 Type *FRANCHISE* - Business opportunity
+
+All drinks just *Rs.40* only! 😊
+What would you like to know?"""
+
+
+MENU_MESSAGE = """🌾 *MumMum Drink Menu* - All at *Rs.40*
+
+1️⃣ *Nuts Ragi Kanji* 🔥
+   Malted Ragi + Dry Fruits | Hot
+
+2️⃣ *Verkadalai Kambu Koolu* 🔥
+   Malted Kambu + Peanut | Hot
+
+3️⃣ *Ulunthu Vellam Sip* 🔥
+   Black Urad Dal + Jaggery | Hot
+
+4️⃣ *Thinai Thenum* 🔥❄️
+   Malted Thinai + Dates + Honey | Hot or Cold
+
+5️⃣ *Cocoa Kuthiraivali* 🔥❄️
+   Malted Kuthiraivali + Cocoa | Hot or Cold
+
+Which drink interests you? I can suggest based on your health needs too! 💚"""
+
+
+LOCATION_MESSAGE = """📍 *MumMum Kiosk Locations*
+
+1️⃣ GH Hospital - RS Puram
+2️⃣ PSG College - Peelamedu
+3️⃣ Brookefields Mall
+4️⃣ Railway Station Junction
+
+⏰ All open *7AM to 9PM* daily
+
+Which location is nearest to you? 😊"""
+
+
+HEALTH_MESSAGE = """💚 *MumMum Health Guide*
+
+🩸 *Diabetes* → Thinai Thenum (low glycemic)
+⚖️ *Weight Loss* → Cocoa Kuthiraivali (high fiber)
+🤰 *Pregnancy/Iron* → Ulunthu Vellam Sip (iron rich)
+👶 *Children/Calcium* → Nuts Ragi Kanji (high calcium)
+❤️ *Heart/BP* → Verkadalai Kambu Koolu (heart healthy)
+
+Tell me your health need and I will recommend the perfect drink! 😊"""
+
+
+FRANCHISE_MESSAGE = """🏪 *MumMum Franchise Opportunity*
+
+✅ *Zero royalty* model
+💰 Setup cost: *Rs.1.2 lakhs* per kiosk
+📈 Break even: *73 cups per day*
+💵 Monthly profit: *Rs.25,000+*
+🎓 Full training + powder supply provided
+
+Interested in owning a MumMum kiosk? 
+Reply *YES* and we will connect you with our team! 😊"""
 
 
 @app.route("/bot", methods=["POST"])
 def bot():
     incoming = request.values.get("Body", "").strip()
     customer = request.values.get("From", "unknown")
+    incoming_lower = incoming.lower().strip()
 
-    if customer not in conversations:
+    # Handle keyword commands directly without AI
+    if incoming_lower in ["menu", "மெனு", "drinks", "list", "drink"]:
+        reply = MENU_MESSAGE
+        return str(MessagingResponse().message(reply))
+
+    if incoming_lower in ["location", "locations", "where", "address", "இடம்"]:
+        reply = LOCATION_MESSAGE
+        return str(MessagingResponse().message(reply))
+
+    if incoming_lower in ["health", "healthy", "suggest", "recommendation", "உடல்நலம்"]:
+        reply = HEALTH_MESSAGE
+        return str(MessagingResponse().message(reply))
+
+    if incoming_lower in ["franchise", "business", "invest", "தொழில்"]:
+        reply = FRANCHISE_MESSAGE
+        return str(MessagingResponse().message(reply))
+
+    # First message - send welcome
+    if customer not in conversations or len(conversations[customer]) == 0:
         conversations[customer] = []
+        reply = WELCOME_MESSAGE
+        conversations[customer].append({"role": "user", "content": incoming})
+        conversations[customer].append({"role": "assistant", "content": reply})
+        return str(MessagingResponse().message(reply))
 
-    conversations[customer].append({
-        "role": "user",
-        "content": incoming
-    })
+    # All other messages - use Claude AI
+    conversations[customer].append({"role": "user", "content": incoming})
 
     if len(conversations[customer]) > 10:
         conversations[customer] = conversations[customer][-10:]
@@ -78,18 +171,14 @@ def bot():
             messages=conversations[customer]
         )
         reply = response.content[0].text
-
-        conversations[customer].append({
-            "role": "assistant",
-            "content": reply
-        })
+        conversations[customer].append({"role": "assistant", "content": reply})
 
     except Exception as e:
         reply = (
             "Vanakkam! I am MumMum assistant. "
-            "Reply MENU to see our drinks. "
+            "Reply *MENU* to see our drinks. "
             "All drinks Rs.40 only! "
-            "Visit GH Hospital or PSG College kiosk."
+            "Visit GH Hospital or PSG College kiosk. 🌾"
         )
 
     resp = MessagingResponse()
@@ -99,7 +188,7 @@ def bot():
 
 @app.route("/", methods=["GET"])
 def home():
-    return "MumMum WhatsApp Bot is LIVE!"
+    return "MumMum WhatsApp Bot is LIVE! 🌾"
 
 
 @app.route("/health", methods=["GET"])
