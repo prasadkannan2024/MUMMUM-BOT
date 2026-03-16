@@ -5,12 +5,3 @@
     "startCommand": "gunicorn app:app --bind 0.0.0.0:$PORT --timeout 120"
   }
 }
-```
-
-This time we keep `/health` but also add the **startCommand** directly!
-
----
-
-**Also update `Procfile` in GitHub:**
-```
-web: gunicorn app:app --bind 0.0.0.0:$PORT --timeout 120
